@@ -1,0 +1,8 @@
+Cartopy>=0.25.0
+cftime>=1.6.4
+matplotlib>=3.9.2
+netCDF4>=1.7.2
+numpy>=2.1.2
+pandas>=2.2.3
+statsmodels>=0.14.6
+xarray>=2024.10.0
