@@ -294,8 +294,8 @@ def generate_figure_2(
 
     # --- Final Cleanup ---
     axA1.set_ylabel("Storage-years (Gt CO$_2$-yr)", fontsize=l_font)
-    axB1.set_ylabel("Degree-years (°C-yr)", fontsize=l_font)
-    axC.set_ylabel("Degree-years (°C-yr)", fontsize=l_font)
+    axB1.set_ylabel("Degree-years of avoided warming (°C-yr)", fontsize=l_font)
+    axC.set_ylabel("Degree-years of avoided warming  (°C-yr)", fontsize=l_font)
     axC.set_xlabel("Storage-years (Gt CO$_2$-yr)", fontsize=l_font)
 
     for label, ax_ref in zip(["A)", "B)", "C)"], [axA1, axB1, axC]):
