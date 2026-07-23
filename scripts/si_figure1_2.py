@@ -43,7 +43,7 @@ def generate_si_figure_1_2(
     # Load dataset if not provided
     if ds is None:
         try:
-            ds = xr.open_dataset(utils.OUTPUT_DIR / "A_sat_diff.nc")
+            ds = xr.open_dataset(utils.DATA_DIR / "A_sat_diff.nc")
         except FileNotFoundError as e:
             logger.error(f"Required spatial difference dataset not found. {e}")
             raise

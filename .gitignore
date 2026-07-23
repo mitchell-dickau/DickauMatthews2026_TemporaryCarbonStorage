@@ -37,12 +37,6 @@ env/
 venv/
 ENV/
 
-# Project-specific directories
-# Using trailing slashes ensures we ignore only the directories, preventing
-# scripts like "data_loader.py" or "analysis_output_plot.py" from being ignored.
-data/
-analysis_output/
-
 # OS-specific files
 .DS_Store
 .DS_Store?

@@ -21,7 +21,6 @@ def main():
 
     # Define the sequence of scripts to run
     analysis_pipeline = [
-        "scripts/calc_asat_spatial_diff.py",
         "scripts/avoided_change_analysis.py",
         "scripts/figure1.py",
         "scripts/figure2.py",

@@ -7,7 +7,7 @@ Repository containing the data processing and visualization code for the manuscr
 *Dickau & Matthews (2026). Temporary carbon storage can mitigate slow-responding climate changes.*
 
 ## Overview
-This repository contains the Python scripts required to process UVic-ESCM climate model outputs and generate the figures presented in the manuscript. The analysis investigates the extent to which temporary carbon storage (and subsequent release) can mitigate slow-responding (irreversible or lag-response) climate system variables compared to permanent carbon dioxide removal (CDR) and baseline overshoot scenarios.
+This repository contains the Python scripts required to process UVic-ESCM climate model outputs and generate the figures presented in the manuscript. The analysis investigates the extent to which temporary carbon storage (and subsequent release) can mitigate slow-responding climate system variables compared to permanent carbon dioxide removal (CDR) and baseline overshoot scenarios.
 
 ## Citation
 If you use this code or data in your research, please cite the associated paper:
@@ -18,9 +18,9 @@ Ensure the `data/` directory is populated with the following NetCDF input files 
 
 | File Name | Description |
 | :--- | :--- |
-| `tsi_data.nc` | Main time-series outputs for baseline, temporary storage, and permanent removal scenarios. |
+| `tsi_data.nc` | Main time-series outputs for baseline (base), temporary storage (sce 1-6), and permanent removal scenarios (sce 7-8) for each SSP. |
 | `tsi_hist.nc` | Historical simulation outputs used for calculating pre-industrial baseline anomalies. |
-| `tavg_A_sat.nc` | Spatial-temporal gridded surface air temperature dataset used to compute regional differences. |
+| `A_sat_diff.nc` | Gridded spatial differences in SAT between storage scenarios and baseline scenarios for 20 yr periods after 2100 and leading up to 2300. |
 
 ## Installation and Setup
 The analysis was performed using Python 3.11.8. It is highly recommended to run this code within a virtual environment.
@@ -50,9 +50,6 @@ The analysis was performed using Python 3.11.8. It is highly recommended to run 
 
      **1. Pre-processing & Analysis Steps:**
      ```bash
-     # Calculate spatial surface air temperature difference maps (saves A_sat_diff.nc)
-     python scripts/calc_asat_spatial_diff.py
-
      # Compute relative avoided change values (saves avoided_change_results.csv)
      python scripts/avoided_change_analysis.py
      ```
@@ -66,12 +63,12 @@ The analysis was performed using Python 3.11.8. It is highly recommended to run 
      python scripts/figure4.py
      python scripts/figure5.py
      python scripts/figure6.py
-     python scripts/figure7.py
+     python scripts/figure7.py # (requires avoided_change_analysis.py)
      python scripts/figure8.py
 
      # Supplementary Information Figures
-     python scripts/si_figure1_2.py  # Plots SI Figures 1 & 2 (requires calc_asat_spatial_diff.py)
-     python scripts/si_figure3.py    # Plots SI Figure 3 (requires avoided_change_analysis.py)
+     python scripts/si_figure1_2.py 
+     python scripts/si_figure3.py   
      ```
 
 4. **Outputs:**
