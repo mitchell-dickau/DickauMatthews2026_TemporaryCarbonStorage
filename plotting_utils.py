@@ -24,7 +24,7 @@ fig_params["plot_config"] = {
     "legend_edge_color": "black",
 }
 fig_params["file_format"] = "pdf"
-fig_params["fig_dpi"] = 300
+fig_params["fig_dpi"] = 500
 fig_params["temp_variants"] = [
     "base",
     "sce1",
@@ -33,9 +33,6 @@ fig_params["temp_variants"] = [
     "sce4",
     "sce5",
     "sce6",
-    "sce7",
-    "sce8",
-    "sce9",
 ]
 fig_params["perm_variants"] = ["sce7", "sce8", "sce9"]
 
@@ -86,7 +83,7 @@ def get_line_legend_handles(variant_styles, plot_variants, no_titles=False):
 
     if not no_titles:
         handles.append(
-            Line2D([0], [0], color="none", label="$\mathbf{Temporary\ Storage:}$")
+            Line2D([0], [0], color="none", label=r"$\mathbf{Temporary\ Storage:}$")
         )
     for var in sorted(plot_variants):
         handles.append(
