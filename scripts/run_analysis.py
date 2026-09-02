@@ -32,6 +32,7 @@ def main():
         "scripts/figure8.py",
         "scripts/si_figure1_2.py",
         "scripts/si_figure3.py",
+        "scripts/si_figure4.py",
     ]
 
     logger.info("Starting execution of the entire analysis pipeline...")

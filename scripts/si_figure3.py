@@ -1,67 +1,70 @@
 import logging
 import os
 import sys
-import textwrap
 from pathlib import Path
-from typing import List, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
+import statsmodels.api as sm
 import xarray as xr
+from matplotlib.lines import Line2D
+from matplotlib.offsetbox import AnchoredOffsetbox, HPacker, TextArea, VPacker
 
 # Add parent directory to path so we can import utils and plotting_utils
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-import plotting_utils  # noqa: E402
-import utils  # noqa: E402
+import plotting_utils
+import utils
 
 logger = logging.getLogger(__name__)
 
 
 def generate_si_figure_3(
-    ds_tsi: Optional[xr.Dataset] = None,
-    vars_irrev: Optional[List[str]] = None,
-    output_dir: Optional[Path] = None,
-    file_format: Optional[str] = None,
-    variants_to_exclude: Optional[List[str]] = plotting_utils.fig_params.get(
-        "perm_variants"
-    ),
-    end_year: Optional[int] = None,
+    ds_tsi: xr.Dataset | None = None,
+    storage_years: xr.DataArray | None = None,
+    degree_years: xr.DataArray | None = None,
+    output_dir: Path | None = None,
+    file_format: str | None = "pdf",
+    variants_to_exclude: list[str] | None = None,
+    end_year: int | None = None,
 ) -> None:
     """
-    Generates and saves SI Figure 3 of the paper (Normalized Irreversibility Grid).
+    Generates and saves SI Figure 3 of the paper (Two-Panel Regression Comparison).
 
-    This figure displays a grid showing:
-      - Rows: Irreversibility variables (defined in utils.vars_irrev by default).
-      - Columns: Active storage variants (excluding 'base' and any excluded variants).
-      - Each grid cell contains two segments: a main timeline (2015-2100) and a
-        compressed timeline (2100-2300) to represent a broken axis.
-      - Differences are normalized to their max value in the 21st century (2015-2100) for each variable, scenario, and variant.
+    This figure shows the relationship between Degree-years and Storage-years:
+      - Panel A: Global regressions across all scenarios for year 2100 (dashed black)
+                 and year 2300 (solid black) with respective R^2 values in the legend.
+      - Panel B: Global regression for year 2100 (dashed black) alongside separate
+                 scenario ensemble regression lines for year 2300 (colored by scenario),
+                 with scatter symbols only in the top legend and individual scenario
+                 R^2 values annotated in the lower right corner with matching SSP colors.
 
     Parameters
     ----------
     ds_tsi : xr.Dataset, optional
         The main timeseries dataset. If not provided, it will be loaded from the default path.
-    vars_irrev : list of str, optional
-        List of variables to plot. Defaults to utils.vars_irrev.
+    storage_years : xr.DataArray, optional
+        Avoided carbon burden integrated over time. If not provided, it will be calculated.
+    degree_years : xr.DataArray, optional
+        Temperature difference integrated over time. If not provided, it will be calculated.
     output_dir : Path, optional
         Directory where the figure will be saved. Defaults to utils.FIGURE_DIR.
     file_format : str, optional
-        Format of the output file (e.g., 'pdf', 'png'). Defaults to fig_params['file_format'].
+        Format of the output file (defaults to 'pdf').
     variants_to_exclude : list of str, optional
-        List of variants to exclude from plotting. Defaults to permanent variants.
+        List of variants to exclude from plotting. Defaults to fig_params['perm_variants'].
     end_year : int, optional
         The end year for plotting. Defaults to the maximum year in the dataset.
     """
-    logger.info("Plotting SI Figure 3...")
+    logger.info("Plotting SI Figure 3 (Two-panel Degree-years vs Storage-years)...")
 
     # Load configuration parameters
     fig_params = plotting_utils.fig_params
     colours = fig_params["colours"]
     plot_config = fig_params["plot_config"]
 
-    l_font = plot_config.get("label_fontsize", 11)
-    t_font = plot_config.get("subplot_title_fontsize", 12)
-    leg_font = plot_config.get("legend_fontsize", 11)
+    l_font = 10
+    t_font = 11
+    leg_font = 8.5
     e_col = plot_config.get("legend_edge_color", "black")
 
     # Load dataset if not provided
@@ -74,10 +77,6 @@ def generate_si_figure_3(
             )
             raise
 
-    # Load vars_irrev from utils if not provided
-    if vars_irrev is None:
-        vars_irrev = getattr(utils, "vars_irrev", [])
-
     # Resolve output directory, file format, and resolution
     if output_dir is None:
         output_dir = utils.FIGURE_DIR
@@ -85,167 +84,321 @@ def generate_si_figure_3(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     if file_format is None:
-        file_format = fig_params.get("file_format", "pdf")
+        file_format = "pdf"
     fig_dpi = fig_params.get("fig_dpi", 300)
 
-    # Resolve time slice
+    # Calculate storage-years and degree-years if not provided
     years = ds_tsi.time.values
-    if end_year:
-        ds_tsi = ds_tsi.sel(time=slice(None, end_year))
-        years = years[years <= end_year]
+    if storage_years is None or degree_years is None:
+        ds_base = ds_tsi.sel(variant="base")
+        if storage_years is None:
+            storage_years = utils.calc_sy(ds_tsi, ds_base, years=years)
+        if degree_years is None:
+            degree_years = utils.calc_dy(ds_base, ds_tsi, years=years)
 
-    split_yr = 2100
-    plot_start_year = 2015
     x_limit = end_year if end_year else max(years)
 
-    # Resolve active variants to plot
-    active_variants = [
-        v
-        for v in ds_tsi.variant.values
-        if v not in (variants_to_exclude or []) and v != "base"
+    # Resolve variants to plot
+    all_variants = ds_tsi.variant.values
+    if variants_to_exclude is None:
+        variants_to_exclude = fig_params.get("perm_variants", [])
+
+    active_vars = [
+        v for v in all_variants if v not in variants_to_exclude and v != "base"
     ]
 
     # Sort scenarios using the canonical order defined in utils
     scenarios = utils._sort_ssp(ds_tsi.scenario.values)
 
-    # Retrieve SSP patch handles (variants argument is set to ["base"] to avoid index errors)
-    _, patch_handles = plotting_utils.get_plot_elements(ds_tsi, ["base"], scenarios)
+    # Retrieve SSP patch handles
+    plot_variants = [
+        v for v in fig_params["temp_variants"] if v not in variants_to_exclude
+    ]
+    _, patch_handles = plotting_utils.get_plot_elements(
+        ds_tsi, plot_variants, scenarios
+    )
 
-    # Ensure patches are canonically sorted
+    # Ensure patches are sorted
     patch_handles = utils._sort_ssp(patch_handles)
 
-    n_rows = len(vars_irrev)
-    n_cols = len(active_variants)
+    # --- Setup Two-Panel Figure (Width reduced by ~25%) ---
+    fig, (axA, axB) = plt.subplots(1, 2, figsize=(10.5, 5.0), sharey=True)
 
-    # Grid proportions: Wide segment (18 units) + gap (1) + Narrow segment (8)
-    col_per_var = 31
-    fig = plt.figure(figsize=(2.8 * n_cols + 1, 2.0 * n_rows))
-    gs = fig.add_gridspec(n_rows, n_cols * col_per_var)
+    # --- Collect Data & Plot Snapshot Scatter Points for Both Panels ---
+    x_2100, y_2100 = [], []
+    x_2300, y_2300 = [], []
+    x_2300_by_sce = {sce: [] for sce in scenarios}
+    y_2300_by_sce = {sce: [] for sce in scenarios}
 
-    # Calculate difference from baseline
-    ds_diff = ds_tsi - ds_tsi.sel(variant="base")
+    # Reversing order so that the first items in the sorted lists (e.g., SSP1-1.9) plot last (on top)
+    for var in active_vars[::-1]:
+        for sce in scenarios[::-1]:
+            sy = storage_years.sel(scenario=sce, variant=var)
+            dy = degree_years.sel(scenario=sce, variant=var)
 
-    # Track axes for sharing logic
-    axes_main = np.empty((n_rows, n_cols), dtype=object)
-    axes_comp = np.empty((n_rows, n_cols), dtype=object)
+            # Snapshot Markers (Hollow with scenario edge color)
+            sy_2100 = float(sy.sel(time=2100.5))
+            dy_2100 = float(dy.sel(time=2100.5))
+            x_2100.append(sy_2100)
+            y_2100.append(dy_2100)
 
-    # --- Plotting Loop ---
-    for r, var in enumerate(vars_irrev):
-        for c, v_name in enumerate(active_variants):
-            start_col = c * col_per_var
+            for ax in [axA]:
+                ax.scatter(
+                    sy_2100,
+                    dy_2100,
+                    facecolors="none",
+                    edgecolors=colours[sce],
+                    marker="*",
+                    s=70,
+                    zorder=3,
+                    linewidths=1.2,
+                    alpha=0.9,
+                )
 
-            # Subplot Creation with sharing
-            share_y = axes_main[r, 0] if c > 0 else None
-            share_x_m = axes_main[0, c] if r > 0 else None
-            share_x_c = axes_comp[0, c] if r > 0 else None
+            if x_limit >= 2300:
+                sy_2300 = float(sy.sel(time=2300.5, method="nearest"))
+                dy_2300 = float(dy.sel(time=2300.5, method="nearest"))
+                x_2300.append(sy_2300)
+                y_2300.append(dy_2300)
+                x_2300_by_sce[sce].append(sy_2300)
+                y_2300_by_sce[sce].append(dy_2300)
 
-            # Main segment (2015-2100)
-            ax1 = fig.add_subplot(
-                gs[r, start_col : start_col + 18], sharey=share_y, sharex=share_x_m
+                for ax in [axA, axB]:
+                    ax.scatter(
+                        sy_2300,
+                        dy_2300,
+                        facecolors="none",
+                        edgecolors=colours[sce],
+                        marker="o",
+                        s=60,
+                        zorder=3,
+                        linewidths=1.2,
+                        alpha=0.9,
+                    )
+
+    # --- Panel A Regressions (Global 2100 and Global 2300, on top with zorder=5) ---
+    m2100 = sm.OLS(y_2100, x_2100).fit()
+    r2_2100 = 1 - (m2100.ssr / m2100.centered_tss)
+    X_plot_2100 = np.linspace(0, max(x_2100), 100)
+    y_plot_2100 = m2100.predict(X_plot_2100)
+
+    axA.plot(
+        X_plot_2100,
+        y_plot_2100,
+        color="black",
+        linestyle="--",
+        lw=2.0,
+        alpha=0.95,
+        zorder=5,
+    )
+
+    fit_handles_A = [
+        Line2D(
+            [0],
+            [0],
+            marker="*",
+            markerfacecolor="none",
+            markeredgecolor="black",
+            markeredgewidth=1.2,
+            label="2100",
+            markersize=7,
+            linestyle="None",
+            alpha=0.9,
+        ),
+        Line2D(
+            [0],
+            [0],
+            color="black",
+            linestyle="--",
+            lw=1.8,
+            label=f"2100 fit ($R^2 = {r2_2100:.4f}$)",
+        ),
+    ]
+
+    if x_2300:
+        m2300 = sm.OLS(y_2300, x_2300).fit()
+        r2_2300 = 1 - (m2300.ssr / m2300.centered_tss)
+        X_plot_2300 = np.linspace(0, max(x_2300), 100)
+        y_plot_2300 = m2300.predict(X_plot_2300)
+
+        axA.plot(
+            X_plot_2300,
+            y_plot_2300,
+            color="black",
+            linestyle="-",
+            lw=2.0,
+            alpha=0.9,
+            zorder=5,
+        )
+
+        fit_handles_A.extend(
+            [
+                Line2D(
+                    [0],
+                    [0],
+                    marker="o",
+                    markerfacecolor="none",
+                    markeredgecolor="black",
+                    markeredgewidth=1.2,
+                    label="2300",
+                    markersize=7,
+                    linestyle="None",
+                    alpha=0.9,
+                ),
+                Line2D(
+                    [0],
+                    [0],
+                    color="black",
+                    linestyle="-",
+                    lw=1.8,
+                    alpha=0.9,
+                    label=f"2300 fit ($R^2 = {r2_2300:.4f}$)",
+                ),
+            ]
+        )
+
+    # --- Panel B Regressions (Global 2100 and Scenario-specific 2300, on top with zorder=5) ---
+
+    r2_by_sce = {}
+    if x_2300:
+        for sce in scenarios:
+            xs = x_2300_by_sce[sce]
+            ys = y_2300_by_sce[sce]
+            m_sce = sm.OLS(ys, xs).fit()
+            r2_sce = 1 - (m_sce.ssr / m_sce.centered_tss)
+            r2_by_sce[sce] = r2_sce
+            X_plot_sce = np.linspace(0, max(xs), 100)
+            y_plot_sce = m_sce.predict(X_plot_sce)
+            axB.plot(
+                X_plot_sce,
+                y_plot_sce,
+                color=colours[sce],
+                linestyle="-",
+                lw=2.0,
+                alpha=0.5,
+                zorder=5,
             )
-            # Compressed segment (2100-2300)
-            ax2 = fig.add_subplot(
-                gs[r, start_col + 19 : start_col + 27], sharey=ax1, sharex=share_x_c
-            )
 
-            axes_main[r, c] = ax1
-            axes_comp[r, c] = ax2
+    # Panel B top legend: ONLY scatterplot symbols
+    marker_handles_B = [
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            markerfacecolor="none",
+            markeredgecolor="black",
+            markeredgewidth=1.2,
+            label="2300",
+            markersize=7,
+            linestyle="None",
+            alpha=0.9,
+        ),
+    ]
 
-            # Plotting (Reversed scenario order to show top scenarios on top)
-            for sce in scenarios[::-1]:
-                # 1. Isolate the 21st-century data
-                century_data = (
-                    ds_diff[var]
-                    .sel(scenario=sce, variant=v_name)
-                    .sel(time=slice(2015, 2100))
-                )
-
-                # 2. Find the maximum absolute value using Python's built-in abs()
-                norm_val = abs(century_data).max(dim="time")
-                diff_data = (
-                    ds_diff[var].sel(scenario=sce, variant=v_name) / norm_val
-                ) * 100
-                ax1.plot(years, diff_data, color=colours[sce], lw=1.2)
-                ax2.plot(years, diff_data, color=colours[sce], lw=1.2)
-
-            # --- Aesthetics & Break Marks ---
-            for ax in [ax1, ax2]:
-                ax.axhline(0, color="grey", lw=0.8, alpha=0.3)
-                ax.tick_params(labelsize=l_font - 2, pad=8)
-
-            ax1.set_xlim(plot_start_year, split_yr)
-            ax2.set_xlim(split_yr, x_limit)
-
-            # Use tick_params instead of set_yticklabels to avoid sharing issues
-            ax2.tick_params(labelleft=False)
-
-            ax1.spines["right"].set_visible(False)
-            ax2.spines["left"].set_visible(False)
-            ax2.yaxis.set_ticks_position("none")
-
-            # Vertical break marks
-            d = 0.03
-            kw = dict(color="k", clip_on=False, lw=1.0)
-            ax1.plot([1, 1], [-d, d], transform=ax1.transAxes, **kw)
-            ax1.plot([1, 1], [1 - d, 1 + d], transform=ax1.transAxes, **kw)
-            ax2.plot([0, 0], [-d, d], transform=ax2.transAxes, **kw)
-            ax2.plot([0, 0], [1 - d, 1 + d], transform=ax2.transAxes, **kw)
-
-            # --- Titles & Labels ---
-            if r == 0:
-                is_perm = any(x in v_name for x in ["7", "8", "9"])
-                title_prefix = "Permanent" if is_perm else "Storage"
-                ax1.set_title(
-                    f"{title_prefix} {v_name[-1]}",
-                    fontweight="bold",
-                    fontsize=t_font - 2,
-                    x=0.6,
-                )
-
-            if c == 0:
-                unit = "%"
-                name = ds_tsi[var].attrs.get("long_name", var).capitalize()
-                ax1.set_ylabel(
-                    "\n".join(textwrap.wrap(f"{name} ({unit})", width=16)),
-                    fontweight="bold",
-                    fontsize=l_font - 2,
-                )
-                # Force labels ON for the first column
-                ax1.tick_params(labelleft=True)
-            else:
-                # Force labels OFF for internal columns
-                ax1.tick_params(labelleft=False)
-
-            # --- Fix X-Axis Visibility & Ticks (Bottom Row Only) ---
-            if r < n_rows - 1:
-                ax1.tick_params(labelbottom=False)
-                ax2.tick_params(labelbottom=False)
-            else:
-                ax1.tick_params(labelbottom=True)
-                ax2.tick_params(labelbottom=True)
-                ax1.set_xticks([2050, 2100])
-                ax2.set_xticks([2300])
-
-    fig.subplots_adjust(hspace=0.25, wspace=0.0)
-
-    # --- Legend & Final Save ---
-    fig.legend(
-        handles=patch_handles,
-        loc="center left",
-        bbox_to_anchor=(0.9, 0.5),
-        title="$\mathbf{SSP:}$",
+    # --- Legends ---
+    L_KWARGS = dict(
         frameon=True,
         edgecolor=e_col,
         fontsize=leg_font,
+        facecolor="white",
+        framealpha=0.9,
     )
+
+    # Panel A Legends
+    leg_ssp_A = axA.legend(handles=patch_handles, loc="upper left", ncol=2, **L_KWARGS)
+    axA.add_artist(leg_ssp_A)
+    axA.legend(
+        handles=fit_handles_A,
+        loc="lower right",
+        ncol=2,
+        **L_KWARGS,
+    )
+
+    # Panel B Legends
+    leg_ssp_B = axB.legend(handles=patch_handles, loc="upper left", ncol=2, **L_KWARGS)
+    axB.add_artist(leg_ssp_B)
+    axB.legend(
+        handles=marker_handles_B,
+        bbox_to_anchor=(0.0, 0.8),
+        loc="upper left",
+        ncol=2,
+        **L_KWARGS,
+    )
+
+    # --- Panel B: Colored SSP R2 Annotations in Lower Right Corner ---
+    if x_2300:
+        col1_sces = scenarios[:4]
+        col2_sces = scenarios[4:]
+
+        col1_boxes = [
+            TextArea(
+                f"SSP{s[3]}-{s[4]}.{s[5]}: $R^2={r2_by_sce[s]:.4f}$",
+                textprops=dict(
+                    color=colours[s],
+                    fontsize=leg_font - 0.5,
+                    fontweight="bold",
+                ),
+            )
+            for s in col1_sces
+        ]
+        col2_boxes = [
+            TextArea(
+                f"SSP{s[3]}-{s[4]}.{s[5]}: $R^2={r2_by_sce[s]:.4f}$",
+                textprops=dict(
+                    color=colours[s],
+                    fontsize=leg_font - 0.5,
+                    fontweight="bold",
+                ),
+            )
+            for s in col2_sces
+        ]
+
+        vbox1 = VPacker(children=col1_boxes, align="left", pad=0, sep=2)
+        vbox2 = VPacker(children=col2_boxes, align="left", pad=0, sep=2)
+        hbox = HPacker(children=[vbox1, vbox2], align="baseline", pad=0, sep=10)
+        full_vbox = VPacker(children=[hbox], align="left", pad=0, sep=3)
+
+        anchored_box = AnchoredOffsetbox(
+            loc="lower right",
+            child=full_vbox,
+            pad=0.4,
+            frameon=True,
+            bbox_to_anchor=(0.99, 0.01),
+            bbox_transform=axB.transAxes,
+            borderpad=0.3,
+        )
+        anchored_box.patch.set_boxstyle("round,pad=0.35")
+        anchored_box.patch.set_facecolor("white")
+        anchored_box.patch.set_edgecolor(e_col)
+        anchored_box.patch.set_alpha(0.9)
+        anchored_box.set_zorder(10)
+        axB.add_artist(anchored_box)
+
+    # --- Subplot Labels & Aesthetics ---
+    for label, ax_ref in zip(["A)", "B)"], [axA, axB]):
+        ax_ref.text(
+            -0.13,
+            1.04,
+            label,
+            transform=ax_ref.transAxes,
+            fontsize=t_font,
+            fontweight="bold",
+            va="top",
+        )
+        ax_ref.set_xlabel("Storage-years (Gt CO$_2$-yr)", fontsize=l_font)
+        ax_ref.tick_params(labelsize=l_font - 1, pad=6)
+
+    axA.set_ylabel("Degree-years of avoided warming (°C-yr)", fontsize=l_font)
+
+    fig.tight_layout()
     output_path = output_dir / f"si_figure3.{file_format}"
-    plt.savefig(
+    fig.savefig(
         output_path,
         dpi=fig_dpi,
         bbox_inches="tight",
     )
     plt.close()
-    logger.info(f"Figure3 successfully saved to {output_path}")
+    logger.info(f"Figure successfully saved to {output_path}")
 
 
 if __name__ == "__main__":
