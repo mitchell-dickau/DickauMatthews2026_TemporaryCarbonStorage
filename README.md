@@ -4,7 +4,7 @@
 **Email:** mitchell.dickau@mail.concordia.ca , dickaumitch@gmail.com
 
 Repository containing the data processing and visualization code for the manuscript:  
-*Dickau & Matthews (2026). Temporary carbon storage can mitigate slow-responding climate changes.*
+*Dickau & Matthews (2026). Temporary carbon storage can mitigate slow-responding climate changes. Nature Communications*
 
 ## Overview
 This repository contains the Python scripts required to process UVic-ESCM climate model outputs and generate the figures presented in the manuscript. The analysis investigates the extent to which temporary carbon storage (and subsequent release) can mitigate slow-responding climate system variables compared to permanent carbon dioxide removal (CDR) and baseline overshoot scenarios.
