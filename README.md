@@ -11,7 +11,7 @@ This repository contains the Python scripts required to process UVic-ESCM climat
 
 ## Citation
 If you use this code or data in your research, please cite the associated paper:
-> Dickau, M., and Matthews, H. D. (2026). Temporary carbon storage can mitigate slow-responding climate changes. Nature Communications (2026).
+> Dickau, M., and Matthews, H. D. (2026). Temporary carbon storage can mitigate slow-responding climate changes. Nature Communications.
 
 ### Data Dictionary
 Ensure the `data/` directory is populated with the following NetCDF input files before running the analysis:
