@@ -4,33 +4,20 @@ import string
 import sys
 import textwrap
 from pathlib import Path
-from typing import List, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import xarray as xr
 
 # Add parent directory to path so we can import utils and plotting_utils
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-import plotting_utils  # noqa: E402
-import utils  # noqa: E402
+import plotting_utils
+import utils
 
 logger = logging.getLogger(__name__)
 
 
-def generate_figure_5(
-    ds_tsi: Optional[xr.Dataset] = None,
-    x_metric: Optional[xr.DataArray] = None,
-    vars_include: Optional[List[str]] = None,
-    output_dir: Optional[Path] = None,
-    file_format: Optional[str] = None,
-    x_label: str = "Storage-years",
-    variants_to_exclude: Optional[List[str]] = plotting_utils.fig_params.get(
-        "perm_variants"
-    ),
-    end_year: Optional[int] = None,
-) -> None:
+def generate_figure_5() -> None:
     """
     Generates and saves Figure 5 of the paper (Regression Analysis Grid).
 
@@ -40,25 +27,6 @@ def generate_figure_5(
       - Rows: Different variables included in 'vars_include' (defaults to utils.vars_irrev).
       - Scatter points represent individual variant/scenario runs, and the red line
         shows a linear regression forced through the origin.
-
-    Parameters
-    ----------
-    ds_tsi : xr.Dataset, optional
-        The main timeseries dataset. If not provided, it will be loaded from the default path.
-    x_metric : xr.DataArray, optional
-        The metric on the x-axis (e.g. Storage-years). If not provided, it will be calculated.
-    vars_include : list of str, optional
-        Variables to represent the rows. Defaults to utils.vars_irrev.
-    output_dir : Path, optional
-        Directory where the figure will be saved. Defaults to utils.FIGURE_DIR.
-    file_format : str, optional
-        Format of the output file (e.g., 'pdf', 'png'). Defaults to fig_params['file_format'].
-    x_label : str, optional
-        Label for the X-axis. Defaults to "Storage-years".
-    variants_to_exclude : list of str, optional
-        List of variants to exclude from plotting. Defaults to permanent variants.
-    end_year : int, optional
-        The end year for plotting. Defaults to the maximum year in the dataset.
     """
     logger.info("Plotting Figure 5...")
 
@@ -73,70 +41,44 @@ def generate_figure_5(
     h_len = plot_config.get("handle_length", 3.5)
     e_col = plot_config.get("legend_edge_color", "black")
 
-    # Load dataset if not provided
-    if ds_tsi is None:
-        try:
-            ds_tsi, _ = utils.load_main_datasets()
-        except FileNotFoundError as e:
-            logger.error(
-                f"Required data not found. Ensure files are in the data directory. {e}"
-            )
-            raise
+    # Load dataset
+    try:
+        ds_tsi, _ = utils.load_main_datasets()
+    except FileNotFoundError as e:
+        logger.error(
+            f"Required data not found. Ensure files are in the data directory. {e}"
+        )
+        raise
 
-    # Load vars_include from utils if not provided
-    if vars_include is None:
-        vars_include = getattr(utils, "vars_sce_independent", [])
+    # Load vars_include
+    vars_include = utils.vars_sce_independent
 
-    # Calculate x_metric (default is Storage-years) if not provided
-    if x_metric is None:
-        ds_base = ds_tsi.sel(variant="base")
-        x_metric = utils.calc_sy(ds_tsi, ds_base, years=ds_tsi.time.values)
+    # Calculate x_metric (default is Storage-years)
+    ds_base = ds_tsi.sel(variant="base")
+    x_metric = utils.calc_sy(ds_tsi, ds_base, years=ds_tsi.time.values)
 
     # Resolve output directory, file format, and resolution
-    if output_dir is None:
-        output_dir = utils.FIGURE_DIR
-    output_dir = Path(output_dir)
+    output_dir = Path(utils.FIGURE_DIR)
     output_dir.mkdir(parents=True, exist_ok=True)
+    data_output_dir = Path(utils.DATA_OUTPUT_DIR)
+    data_output_dir.mkdir(parents=True, exist_ok=True)
 
-    if file_format is None:
-        file_format = fig_params.get("file_format", "pdf")
-    fig_dpi = fig_params.get("fig_dpi", 300)
+    file_format = fig_params.get("file_format", "pdf")
+    fig_dpi = fig_params.get("fig_dpi")
 
     # Resolve time slice
     years = ds_tsi.time.values
-    if end_year:
-        ds_tsi = ds_tsi.sel(time=slice(None, end_year))
-        years = years[years <= end_year]
 
     # Resolve active variants to plot
-    active_variants = [
-        v
-        for v in ds_tsi.variant.values
-        if v not in (variants_to_exclude or []) and v != "base"
-    ]
+    plot_variants = active_variants = [v for v in utils.temp_variants if v != "base"]
 
     # Sort scenarios using the order defined in utils
     scenarios = utils._sort_ssp(ds_tsi.scenario.values)
 
-    # Retrieve line styles and SSP patch handles
-    plot_variants = [
-        v for v in fig_params["temp_variants"] if v not in (variants_to_exclude or [])
-    ]
-
-    # Retrieve line styles with robust fallback if variants exceed the style pool size
-    try:
-        variant_styles, patch_handles = plotting_utils.get_plot_elements(
-            ds_tsi, plot_variants, scenarios
-        )
-    except IndexError:
-        temp_pool = ["--", ":", "-.", (0, (3, 5, 1, 5)), (0, (5, 10)), (0, (1, 1))]
-        variant_styles = {}
-        for i, var in enumerate(sorted(plot_variants)):
-            if var == "base":
-                variant_styles[var] = "-"
-            else:
-                variant_styles[var] = temp_pool[(i - 1) % len(temp_pool)]
-        _, patch_handles = plotting_utils.get_plot_elements(ds_tsi, ["base"], scenarios)
+    # Retrieve line styles
+    variant_styles, patch_handles = plotting_utils.get_plot_elements(
+        ds_tsi, plot_variants, scenarios
+    )
 
     # Ensure patches are canonically sorted
     patch_handles = utils._sort_ssp(patch_handles)
@@ -152,6 +94,9 @@ def generate_figure_5(
     time_snapshots = [2100.5, 2300.5]
     regression_results = []
 
+    # dictionary to save figure data
+    fig_data = {}
+
     # --- Plotting Loop ---
     for c, t_snap in enumerate(time_snapshots):
         for r, var in enumerate(vars_include):
@@ -159,6 +104,10 @@ def generate_figure_5(
             ax.axhline(0, color="grey", lw=0.8, alpha=0.3)
 
             global_x, global_y, global_colors = [], [], []
+
+            # save data to 2300
+            if t_snap == 2300.5:
+                fig_data[var] = {"time": years}
 
             # Filter data to the specific time snapshot
             for v_name in active_variants:
@@ -179,6 +128,10 @@ def generate_figure_5(
                             alpha=0.25,
                             lw=0.8,
                         )
+
+                        # save data to 2300
+                        if t_snap == 2300.5:
+                            fig_data[var][f"{sce} - {v_name}"] = y_val
 
                         global_x.append(x_val)
                         global_y.append(y_val)
@@ -236,7 +189,7 @@ def generate_figure_5(
                 )
 
             if r == len(vars_include) - 1:
-                ax.set_xlabel(f"{x_label} (Gt CO$_2$-yr)", fontsize=l_font - 1)
+                ax.set_xlabel("Storage-years (Gt CO$_2$-yr)", fontsize=l_font - 1)
             ax.tick_params(labelsize=l_font - 2)
 
             # Letter labels for panels (e.g. A), B))
@@ -287,12 +240,16 @@ def generate_figure_5(
     logger.info(f"Figure successfully saved to {output_path}")
 
     # Output regression results as csv
-    csv_path = utils.OUTPUT_DIR / "regression_results.csv"
+    csv_path = utils.DATA_OUTPUT_DIR / "Fig5_regression_results.csv"
     pd.DataFrame(
         regression_results,
         columns=["time", "variable", "R2", "m", "ci", "rmse"],
     ).to_csv(csv_path, index=False)
     logger.info(f"Regression results saved to {csv_path}")
+
+    # save figure data
+    for k, v in fig_data.items():
+        pd.DataFrame(v).to_csv(data_output_dir / f"Fig5_{k}.csv", index=False)
 
 
 if __name__ == "__main__":

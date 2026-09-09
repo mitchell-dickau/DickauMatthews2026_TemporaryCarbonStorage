@@ -21,7 +21,6 @@ def main():
 
     # Define the sequence of scripts to run
     analysis_pipeline = [
-        "scripts/avoided_change_analysis.py",
         "scripts/figure1.py",
         "scripts/figure2.py",
         "scripts/figure3.py",
@@ -42,7 +41,9 @@ def main():
         logger.info(f"Running {script}...")
 
         # Run each script as a subprocess in the same environment and directory
-        result = subprocess.run([python_exe, script_path], cwd=project_root)
+        result = subprocess.run(
+            [python_exe, script_path], cwd=project_root, check=False
+        )
         if result.returncode != 0:
             logger.error(
                 f"Execution failed for {script} with exit code {result.returncode}"

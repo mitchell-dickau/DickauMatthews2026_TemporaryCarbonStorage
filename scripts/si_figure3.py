@@ -6,7 +6,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import statsmodels.api as sm
-import xarray as xr
 from matplotlib.lines import Line2D
 from matplotlib.offsetbox import AnchoredOffsetbox, HPacker, TextArea, VPacker
 
@@ -18,15 +17,7 @@ import utils
 logger = logging.getLogger(__name__)
 
 
-def generate_si_figure_3(
-    ds_tsi: xr.Dataset | None = None,
-    storage_years: xr.DataArray | None = None,
-    degree_years: xr.DataArray | None = None,
-    output_dir: Path | None = None,
-    file_format: str | None = "pdf",
-    variants_to_exclude: list[str] | None = None,
-    end_year: int | None = None,
-) -> None:
+def generate_si_figure_3() -> None:
     """
     Generates and saves SI Figure 3 of the paper (Two-Panel Regression Comparison).
 
@@ -37,23 +28,6 @@ def generate_si_figure_3(
                  scenario ensemble regression lines for year 2300 (colored by scenario),
                  with scatter symbols only in the top legend and individual scenario
                  R^2 values annotated in the lower right corner with matching SSP colors.
-
-    Parameters
-    ----------
-    ds_tsi : xr.Dataset, optional
-        The main timeseries dataset. If not provided, it will be loaded from the default path.
-    storage_years : xr.DataArray, optional
-        Avoided carbon burden integrated over time. If not provided, it will be calculated.
-    degree_years : xr.DataArray, optional
-        Temperature difference integrated over time. If not provided, it will be calculated.
-    output_dir : Path, optional
-        Directory where the figure will be saved. Defaults to utils.FIGURE_DIR.
-    file_format : str, optional
-        Format of the output file (defaults to 'pdf').
-    variants_to_exclude : list of str, optional
-        List of variants to exclude from plotting. Defaults to fig_params['perm_variants'].
-    end_year : int, optional
-        The end year for plotting. Defaults to the maximum year in the dataset.
     """
     logger.info("Plotting SI Figure 3 (Two-panel Degree-years vs Storage-years)...")
 
@@ -67,56 +41,36 @@ def generate_si_figure_3(
     leg_font = 8.5
     e_col = plot_config.get("legend_edge_color", "black")
 
-    # Load dataset if not provided
-    if ds_tsi is None:
-        try:
-            ds_tsi, _ = utils.load_main_datasets()
-        except FileNotFoundError as e:
-            logger.error(
-                f"Required data not found. Ensure files are in the data directory. {e}"
-            )
-            raise
+    # Load dataset
+    try:
+        ds_tsi, _ = utils.load_main_datasets()
+    except FileNotFoundError as e:
+        logger.error(
+            f"Required data not found. Ensure files are in the data directory. {e}"
+        )
+        raise
 
     # Resolve output directory, file format, and resolution
-    if output_dir is None:
-        output_dir = utils.FIGURE_DIR
-    output_dir = Path(output_dir)
+    output_dir = Path(utils.FIGURE_DIR)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    if file_format is None:
-        file_format = "pdf"
-    fig_dpi = fig_params.get("fig_dpi", 300)
+    file_format = fig_params.get("file_format", "pdf")
+    fig_dpi = fig_params.get("fig_dpi")
 
-    # Calculate storage-years and degree-years if not provided
+    # Calculate storage-years and degree-years
     years = ds_tsi.time.values
-    if storage_years is None or degree_years is None:
-        ds_base = ds_tsi.sel(variant="base")
-        if storage_years is None:
-            storage_years = utils.calc_sy(ds_tsi, ds_base, years=years)
-        if degree_years is None:
-            degree_years = utils.calc_dy(ds_base, ds_tsi, years=years)
-
-    x_limit = end_year if end_year else max(years)
+    ds_base = ds_tsi.sel(variant="base")
+    storage_years = utils.calc_sy(ds_tsi, ds_base, years=years)
+    degree_years = utils.calc_dy(ds_base, ds_tsi, years=years)
 
     # Resolve variants to plot
-    all_variants = ds_tsi.variant.values
-    if variants_to_exclude is None:
-        variants_to_exclude = fig_params.get("perm_variants", [])
-
-    active_vars = [
-        v for v in all_variants if v not in variants_to_exclude and v != "base"
-    ]
+    active_vars = [v for v in utils.temp_variants if v != "base"]
 
     # Sort scenarios using the canonical order defined in utils
     scenarios = utils._sort_ssp(ds_tsi.scenario.values)
 
     # Retrieve SSP patch handles
-    plot_variants = [
-        v for v in fig_params["temp_variants"] if v not in variants_to_exclude
-    ]
-    _, patch_handles = plotting_utils.get_plot_elements(
-        ds_tsi, plot_variants, scenarios
-    )
+    _, patch_handles = plotting_utils.get_plot_elements(ds_tsi, active_vars, scenarios)
 
     # Ensure patches are sorted
     patch_handles = utils._sort_ssp(patch_handles)
@@ -155,26 +109,25 @@ def generate_si_figure_3(
                     alpha=0.9,
                 )
 
-            if x_limit >= 2300:
-                sy_2300 = float(sy.sel(time=2300.5, method="nearest"))
-                dy_2300 = float(dy.sel(time=2300.5, method="nearest"))
-                x_2300.append(sy_2300)
-                y_2300.append(dy_2300)
-                x_2300_by_sce[sce].append(sy_2300)
-                y_2300_by_sce[sce].append(dy_2300)
+            sy_2300 = float(sy.sel(time=2300.5, method="nearest"))
+            dy_2300 = float(dy.sel(time=2300.5, method="nearest"))
+            x_2300.append(sy_2300)
+            y_2300.append(dy_2300)
+            x_2300_by_sce[sce].append(sy_2300)
+            y_2300_by_sce[sce].append(dy_2300)
 
-                for ax in [axA, axB]:
-                    ax.scatter(
-                        sy_2300,
-                        dy_2300,
-                        facecolors="none",
-                        edgecolors=colours[sce],
-                        marker="o",
-                        s=60,
-                        zorder=3,
-                        linewidths=1.2,
-                        alpha=0.9,
-                    )
+            for ax in [axA, axB]:
+                ax.scatter(
+                    sy_2300,
+                    dy_2300,
+                    facecolors="none",
+                    edgecolors=colours[sce],
+                    marker="o",
+                    s=60,
+                    zorder=3,
+                    linewidths=1.2,
+                    alpha=0.9,
+                )
 
     # --- Panel A Regressions (Global 2100 and Global 2300, on top with zorder=5) ---
     m2100 = sm.OLS(y_2100, x_2100).fit()
@@ -296,13 +249,13 @@ def generate_si_figure_3(
     ]
 
     # --- Legends ---
-    L_KWARGS = dict(
-        frameon=True,
-        edgecolor=e_col,
-        fontsize=leg_font,
-        facecolor="white",
-        framealpha=0.9,
-    )
+    L_KWARGS = {
+        "frameon": True,
+        "edgecolor": e_col,
+        "fontsize": leg_font,
+        "facecolor": "white",
+        "framealpha": 0.9,
+    }
 
     # Panel A Legends
     leg_ssp_A = axA.legend(handles=patch_handles, loc="upper left", ncol=2, **L_KWARGS)
@@ -333,22 +286,22 @@ def generate_si_figure_3(
         col1_boxes = [
             TextArea(
                 f"SSP{s[3]}-{s[4]}.{s[5]}: $R^2={r2_by_sce[s]:.4f}$",
-                textprops=dict(
-                    color=colours[s],
-                    fontsize=leg_font - 0.5,
-                    fontweight="bold",
-                ),
+                textprops={
+                    "color": colours[s],
+                    "fontsize": leg_font - 0.5,
+                    "fontweight": "bold",
+                },
             )
             for s in col1_sces
         ]
         col2_boxes = [
             TextArea(
                 f"SSP{s[3]}-{s[4]}.{s[5]}: $R^2={r2_by_sce[s]:.4f}$",
-                textprops=dict(
-                    color=colours[s],
-                    fontsize=leg_font - 0.5,
-                    fontweight="bold",
-                ),
+                textprops={
+                    "color": colours[s],
+                    "fontsize": leg_font - 0.5,
+                    "fontweight": "bold",
+                },
             )
             for s in col2_sces
         ]

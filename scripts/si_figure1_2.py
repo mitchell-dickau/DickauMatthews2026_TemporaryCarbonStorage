@@ -2,7 +2,6 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Optional
 
 import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
@@ -10,17 +9,13 @@ import xarray as xr
 
 # Add parent directory to path so we can import utils and plotting_utils
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-import plotting_utils  # noqa: E402
-import utils  # noqa: E402
+import plotting_utils
+import utils
 
 logger = logging.getLogger(__name__)
 
 
-def generate_si_figure_1_2(
-    ds: Optional[xr.Dataset] = None,
-    output_dir: Optional[Path] = None,
-    file_format: Optional[str] = None,
-) -> None:
+def generate_si_figure_1_2() -> None:
     """
     Generates and saves SI Figure 1-2 (Spatial Surface Air Temperature Difference).
 
@@ -28,35 +23,22 @@ def generate_si_figure_1_2(
     for 6 variants (sce1 to sce6, as rows) and 8 scenarios (columns), projected
     onto a Robinson map projection.
 
-    Parameters
-    ----------
-    ds : xr.Dataset, optional
-        Dataset containing spatial differences. If not provided, it will be loaded from
-        the default file (A_sat_diff.nc).
-    output_dir : Path, optional
-        Directory where the figure will be saved. Defaults to utils.FIGURE_DIR.
-    file_format : str, optional
-        Format of the output file (e.g., 'pdf', 'png'). Defaults to fig_params['file_format'].
     """
     logger.info("Reading in spatial diff data from A_sat_diff.nc...")
 
-    # Load dataset if not provided
-    if ds is None:
-        try:
-            ds = xr.open_dataset(utils.DATA_DIR / "A_sat_diff.nc")
-        except FileNotFoundError as e:
-            logger.error(f"Required spatial difference dataset not found. {e}")
-            raise
+    # Load dataset
+    try:
+        ds = xr.open_dataset(utils.DATA_DIR / "A_sat_diff.nc")
+    except FileNotFoundError as e:
+        logger.error(f"Required spatial difference dataset not found. {e}")
+        raise
 
     fig_params = plotting_utils.fig_params
 
-    if output_dir is None:
-        output_dir = utils.FIGURE_DIR
-    output_dir = Path(output_dir)
+    output_dir = Path(utils.FIGURE_DIR)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    if file_format is None:
-        file_format = fig_params.get("file_format", "pdf")
+    file_format = fig_params.get("file_format", "pdf")
 
     scenarios = utils._sort_ssp(ds.scenario.values)
 
@@ -139,7 +121,7 @@ def generate_si_figure_1_2(
         fig.savefig(
             output_path,
             format=file_format,
-            dpi=500,
+            dpi=fig_params.get("fig_dpi"),
             bbox_inches="tight",
             pad_inches=0.1,
         )

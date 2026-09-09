@@ -7,8 +7,9 @@ import xarray as xr
 # Since utils.py is in the root, its parent is the Project Root
 ROOT_DIR = Path(__file__).parent
 DATA_DIR = ROOT_DIR / "data"
-FIGURE_DIR = ROOT_DIR / "analysis_output" / "figures"
 OUTPUT_DIR = ROOT_DIR / "analysis_output"
+FIGURE_DIR = OUTPUT_DIR / "figures"
+DATA_OUTPUT_DIR = OUTPUT_DIR / "figure_data"
 
 # variable declaration
 vars_irrev = ["L_permacarb", "O_dsealev", "O_motmax", "O_temp", "O_totcarb"]
@@ -18,11 +19,25 @@ vars_sce_dependent = [
     "O_motmax",
 ]
 
+# temporary storage variants of SSPs + baseline (referecence) SSP
+temp_variants = [
+    "base",
+    "sce1",
+    "sce2",
+    "sce3",
+    "sce4",
+    "sce5",
+    "sce6",
+]
+# permanent removal variants
+perm_variants = ["sce7", "sce8", "sce9"]
+
 
 # funciton to set up output direcetories
 def setup_output_directories():
-    Path(FIGURE_DIR).mkdir(parents=True, exist_ok=True)
     Path(OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
+    Path(FIGURE_DIR).mkdir(parents=True, exist_ok=True)
+    Path(DATA_DIR).mkdir(parents=True, exist_ok=True)
 
 
 #### HELPER FUNCTIONS ####

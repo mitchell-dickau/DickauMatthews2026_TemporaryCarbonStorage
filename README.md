@@ -11,14 +11,14 @@ This repository contains the Python scripts required to process UVic-ESCM climat
 
 ## Citation
 If you use this code or data in your research, please cite the associated paper:
-> Dickau, M., and Matthews, H. D. (2026). Temporary carbon storage can mitigate slow-responding climate changes. Nature Communications (In Review).
+> Dickau, M., and Matthews, H. D. (2026). Temporary carbon storage can mitigate slow-responding climate changes. Nature Communications (2026).
 
 ### Data Dictionary
 Ensure the `data/` directory is populated with the following NetCDF input files before running the analysis:
 
 | File Name | Description |
 | :--- | :--- |
-| `tsi_data.nc` | Main time-series outputs for baseline (base), temporary storage (sce 1-6), and permanent removal scenarios (sce 7-8) for each SSP. |
+| `tsi_data.nc` | Main time-series outputs for baseline (base), temporary storage pathways (sce 1-6), and permanent removal scenarios (sce 7-9). |
 | `tsi_hist.nc` | Historical simulation outputs used for calculating pre-industrial baseline anomalies. |
 | `A_sat_diff.nc` | Gridded spatial differences in SAT between storage scenarios and baseline scenarios for 20 yr periods after 2100 and leading up to 2300. |
 
@@ -74,7 +74,7 @@ The analysis was performed using Python 3.11.8. It is highly recommended to run 
 
 4. **Outputs:**
    * Generated figures will be saved to `analysis_output/figures/`.
-   * Spatial difference NetCDF datasets and regression CSV files will be saved directly to `analysis_output/`.
+   * Figure data will be saved to `analysis_output/figure_data`.
 
 ## License
 This project is licensed under the MIT License - see the LICENSE file for details.

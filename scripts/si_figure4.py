@@ -6,7 +6,6 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-import xarray as xr
 
 # Add parent directory to path so we can import utils and plotting_utils
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -16,16 +15,7 @@ import utils
 logger = logging.getLogger(__name__)
 
 
-def generate_si_figure_4(
-    ds_tsi: xr.Dataset | None = None,
-    vars_irrev: list[str] | None = None,
-    output_dir: Path | None = None,
-    file_format: str | None = None,
-    variants_to_exclude: list[str] | None = plotting_utils.fig_params.get(
-        "perm_variants"
-    ),
-    end_year: int | None = None,
-) -> None:
+def generate_si_figure_4() -> None:
     """
     Generates and saves SI Figure 4 of the paper (Normalized Irreversibility Grid).
 
@@ -36,20 +26,6 @@ def generate_si_figure_4(
         compressed timeline (2100-2300) to represent a broken axis.
       - Differences are normalized to their max value in the 21st century (2015-2100) for each variable, scenario, and variant.
 
-    Parameters
-    ----------
-    ds_tsi : xr.Dataset, optional
-        The main timeseries dataset. If not provided, it will be loaded from the default path.
-    vars_irrev : list of str, optional
-        List of variables to plot. Defaults to utils.vars_irrev.
-    output_dir : Path, optional
-        Directory where the figure will be saved. Defaults to utils.FIGURE_DIR.
-    file_format : str, optional
-        Format of the output file (e.g., 'pdf', 'png'). Defaults to fig_params['file_format'].
-    variants_to_exclude : list of str, optional
-        List of variants to exclude from plotting. Defaults to permanent variants.
-    end_year : int, optional
-        The end year for plotting. Defaults to the maximum year in the dataset.
     """
     logger.info("Plotting SI Figure 4...")
 
@@ -63,46 +39,33 @@ def generate_si_figure_4(
     leg_font = plot_config.get("legend_fontsize", 11)
     e_col = plot_config.get("legend_edge_color", "black")
 
-    # Load dataset if not provided
-    if ds_tsi is None:
-        try:
-            ds_tsi, _ = utils.load_main_datasets()
-        except FileNotFoundError as e:
-            logger.error(
-                f"Required data not found. Ensure files are in the data directory. {e}"
-            )
-            raise
+    # Load dataset
+    try:
+        ds_tsi, _ = utils.load_main_datasets()
+    except FileNotFoundError as e:
+        logger.error(
+            f"Required data not found. Ensure files are in the data directory. {e}"
+        )
+        raise
 
-    # Load vars_irrev from utils if not provided
-    if vars_irrev is None:
-        vars_irrev = getattr(utils, "vars_irrev", [])
+    # Load vars_irrev from utils
+    vars_irrev = utils.vars_irrev
 
     # Resolve output directory, file format, and resolution
-    if output_dir is None:
-        output_dir = utils.FIGURE_DIR
-    output_dir = Path(output_dir)
+    output_dir = Path(utils.FIGURE_DIR)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    if file_format is None:
-        file_format = fig_params.get("file_format", "pdf")
-    fig_dpi = fig_params.get("fig_dpi", 300)
+    file_format = fig_params.get("file_format", "pdf")
+    fig_dpi = fig_params.get("fig_dpi")
 
-    # Resolve time slice
+    # years
     years = ds_tsi.time.values
-    if end_year:
-        ds_tsi = ds_tsi.sel(time=slice(None, end_year))
-        years = years[years <= end_year]
 
     split_yr = 2100
     plot_start_year = 2015
-    x_limit = end_year if end_year else max(years)
 
     # Resolve active variants to plot
-    active_variants = [
-        v
-        for v in ds_tsi.variant.values
-        if v not in (variants_to_exclude or []) and v != "base"
-    ]
+    active_variants = [v for v in utils.temp_variants if v != "base"]
 
     # Sort scenarios using the canonical order defined in utils
     scenarios = utils._sort_ssp(ds_tsi.scenario.values)
@@ -118,7 +81,7 @@ def generate_si_figure_4(
 
     # Grid proportions: Wide segment (18 units) + gap (1) + Narrow segment (8)
     col_per_var = 31
-    fig = plt.figure(figsize=(2.8 * n_cols + 1, 2.0 * n_rows))
+    fig = plt.figure(figsize=(2 * n_cols + 1, 1.6 * n_rows))
     gs = fig.add_gridspec(n_rows, n_cols * col_per_var)
 
     # Calculate difference from baseline
@@ -173,7 +136,9 @@ def generate_si_figure_4(
                 ax.tick_params(labelsize=l_font - 2, pad=8)
 
             ax1.set_xlim(plot_start_year, split_yr)
-            ax2.set_xlim(split_yr, x_limit)
+            ax2.set_xlim(
+                split_yr,
+            )
 
             # Use tick_params instead of set_yticklabels to avoid sharing issues
             ax2.tick_params(labelleft=False)
@@ -184,7 +149,7 @@ def generate_si_figure_4(
 
             # Vertical break marks
             d = 0.03
-            kw = dict(color="k", clip_on=False, lw=1.0)
+            kw = {"color": "k", "clip_on": False, "lw": 1.0}
             ax1.plot([1, 1], [-d, d], transform=ax1.transAxes, **kw)
             ax1.plot([1, 1], [1 - d, 1 + d], transform=ax1.transAxes, **kw)
             ax2.plot([0, 0], [-d, d], transform=ax2.transAxes, **kw)

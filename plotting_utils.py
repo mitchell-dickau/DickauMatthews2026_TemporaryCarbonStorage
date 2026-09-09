@@ -25,16 +25,6 @@ fig_params["plot_config"] = {
 }
 fig_params["file_format"] = "pdf"
 fig_params["fig_dpi"] = 500
-fig_params["temp_variants"] = [
-    "base",
-    "sce1",
-    "sce2",
-    "sce3",
-    "sce4",
-    "sce5",
-    "sce6",
-]
-fig_params["perm_variants"] = ["sce7", "sce8", "sce9"]
 
 
 # make legend elements -- patches
@@ -101,7 +91,7 @@ def get_line_legend_handles(variant_styles, plot_variants, no_titles=False):
 
 
 # plot linear regression
-def plot_lr(x, y, ax, color, fill_between: bool = True, **kwargs):
+def plot_lr(x, y, ax, color, fill_between: bool = True, line_width=2, **kwargs):
     """
     Fits a linear model through the origin and calculates statistics
     using only SciPy and NumPy.
@@ -157,7 +147,7 @@ def plot_lr(x, y, ax, color, fill_between: bool = True, **kwargs):
         X_plot,
         y_plot_preds,
         color=color,
-        lw=2,
+        lw=line_width,
         alpha=1 if fill_between else 0.5,
         label=f"Regression Line (Slope: {slope:.3f})",
     )
